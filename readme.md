@@ -1,6 +1,6 @@
 * Rabo2ofx *
 
-This program converts the rabo csv file for non-business
+This program converts the Dutch rabo csv file for non-business
 customers to the financial records of OFX which Gnucash
 can process. The csv file is available for download for each customer.
 
