@@ -3,7 +3,7 @@
 #
 #        rabo2ofx.py
 #
-#        Copyright 2015 Guus Bonnema <gbonnema@xs4all.nl>
+#        Copyright 2015,2016,2018 Guus Bonnema <gbonnema@xs4all.nl>
 #
 #        Based on source from ing2ofx.py by Arie van Dobben for ING (GPL v 3)
 #            Copyright 2013 Arie van Dobben <avandobben@gmail.com>
@@ -21,6 +21,11 @@
 #        You should have received a copy of the GNU General Public License
 #        along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
+#
+# 2018-04-07 guus  Adapted to version 1.0 of Rabobank csv files (download from Rabobank)
+#                  New field layout and first row is header row
+# 2016-01-02 guus  Adapted to undocumented version of Rabobank csv files (exported as .txt files)
+# 
 
 """
 The intent of this script is to convert rabo csv files to ofx files. These
@@ -34,6 +39,13 @@ which is now dead.
 
 Find the ofx specification at http://www.ofx.net/
 
+== Documentation from 2018 (current version) ==
+
+Since approximately Jan 2018, the Rabo bank changed the layout or the
+CSV files. The layout is documented in 
+https://www.rabobank.nl/images/format-description-csv-en_29939190.pdf.
+
+== Documentation until 2018 ==
 Conversion of RABO bank download csv file (comma separated).
 Started from incomplete and old RABO docs. deducted file structure from live
 transactions (web + download).
@@ -91,6 +103,7 @@ are not always filled.
 """
 
 import csv
+import re
 import argparse
 import datetime
 import os
@@ -104,84 +117,93 @@ MAINTAINERS = {"gbo": "Guus Bonnema"}
 HISTORY = {
     "1.0": ("Initial version", "2015-12-30", "gbo"),
     "1.01": ("Correction for description of db: add space between " +
-            "name and description.", "2015-12-30", "gbo"),
+             "name and description.", "2015-12-30", "gbo"),
     "1.02": ("Added sequence to fitid for same amount, same date.",
-                "2016-01-02", "gbo")
+             "2016-01-02", "gbo"),
+    "2.00 dev": ("(in development) CSV format updated to new RABO format (no docs available).",
+                 "2018-04-03", "gbo")
     }
 
-VERSION = "1.02"
+VERSION = "2.00 dev"
 # Needed for version argument
-version_string = '%%(prog)s version %s (%s: [%s] %s)' % (VERSION,
-            HISTORY[VERSION][2],
-            HISTORY[VERSION][1],
-            HISTORY[VERSION][0])
+VERSION_STRING = '%%(prog)s version %s (%s: [%s] %s)' % (VERSION,
+                                                         HISTORY[VERSION][2],
+                                                         HISTORY[VERSION][1],
+                                                         HISTORY[VERSION][0])
 
 """ First parse the command line arguments. """
-parser = argparse.ArgumentParser(prog='rabo2ofx',
-    description="""
+PARSER = argparse.ArgumentParser(prog='rabo2ofx',
+                                 description="""
     The intent of this script is to convert rabo csv files to ofx files. These
-    csv file you can download when logged in to www.rabo.nl as customer of Rabo.
+    csv files you can download when logged in to www.rabo.nl as customer of Rabo.
     The intention is to create OFX files for GnuCash (www.gucash.org).
                                  """)
-parser.add_argument('csvfile', help='A csvfile to process')
-parser.add_argument('-o, --outfile', dest='outfile',
-   help='Output filename', default=None)
-parser.add_argument('-d, --directory', dest='dir',
-   help='Directory to store output, default is ./ofx', default='ofx')
-parser.add_argument('-c, --convert', dest='convert',
-   help="Convert decimal separator to dots (.), default is false",
-   action='store_true')
-parser.add_argument('--version', '-v', action='version',
-    version=version_string)
-args = parser.parse_args()
+PARSER.add_argument('csvfile', help='A csvfile to process')
+PARSER.add_argument('-o, --outfile', dest='outfile',
+                    help='Output filename', default=None)
+PARSER.add_argument('-d, --directory', dest='dir',
+                    help='Directory to store output, default is ./ofx', default='ofx')
+PARSER.add_argument('-c, --comma', dest='dec_comma',
+                    help="Convert decimal point to decimal comma, default is decimal_point",
+                    action='store_true')
+PARSER.add_argument('--version', '-v', action='version',
+                    version=VERSION_STRING)
+ARGS = PARSER.parse_args()
 
 
-class csvfile():
+class CsvFile():
     """ Read the csv file into a list intended for ofx"""
 
     keyAccount = 'acctNr'
     keyCurrency = 'currency'
+    keyBIC = 'BIC'
+    keySerialNumber = 'serNr'
+    keyTxDate = 'txDate'
     keyInterestDate = 'interestDate'
-    keyDebCredCode = 'debCredCode'
     keyAmount = 'amount'
+    keyBalanceAfterTxn = 'balance'
     keyCounterAcctNr = 'counterAcctNr'
     keyCounterAcctName = 'counterAcctName'
-    keyTxDate = 'txDate'
+    keyCounterPartyName = 'counterPartyName'
+    keyInitiatingPartyName = 'initPartyName'
+    keyCounterPartyBIC = 'counterPartyBIC'
     keyBookCode = 'bookCode'
-    keyBudgetCode = 'budgetCode'
+    keyBatchId = 'batchId'
+    keyTxRef = 'txRef'
+    keyMachtigingskenmerk = 'machtigingskenmerk'
+    keyIncassantID = 'incassantID'
+    keyBetalingsKenmerk = 'betalingskenmerk'
     keyDescr1 = 'descr1'
     keyDescr2 = 'descr2'
     keyDescr3 = 'descr3'
-    keyDescr4 = 'descr4'
-    keyDescr5 = 'descr5'
-    keyDescr6 = 'descr6'
-    keyTxRef = 'txRef'
-    keyIncassantID = 'incassantID'
+    keyRedenRetour = 'redenRetour'
+    keyOriginalAmount = 'oorspronkelijk bedrag'
+    keyOriginalCurrency = 'oorspronkelijke munt'
+    keyExchangeRate = 'exchangeRate'
     keyAuthCode = 'authCode'
-    ofxTrnType = {'C': 'CREDIT', 'D': 'DEBIT'}
 
     #Description of book codes for the Rabo
     bookcode = {
-          "ac": "acceptgiro",
-          "ba": "betaalautomaat",
-          "bc": "betalen contactloos",
-          "bg": "bankgiro opdracht",
-          "cb": "crediteuren betaling",
-          "ck": "chipknip",
-          "db": "diverse boekingen",
-          "eb": "bedrijven euro-incasso",
-          "ei": "euro-incasso",
-          "fb": "finbox",
-          "ga": "geldautomaat euro",
-          "gb": "geldautomaat vv",
-          "id": "ideal",
-          "kh": "kashandeling",
-          "ma": "machtiging",
-          "sb": "salarisbetaling",
-          "tb": "eigen rekening",
-          "sp": "spoedbetaling",
-          "CR": "tegoed",
-          "D": "tekort"
+        "ac": "acceptgiro",
+        "ba": "betaalautomaat",
+        "bc": "betalen contactloos",
+        "bg": "bankgiro opdracht",
+        "cb": "crediteuren betaling",
+        "ck": "chipknip",
+        "db": "diverse boekingen",
+        "eb": "bedrijven euro-incasso",
+        "ei": "euro-incasso",
+        "fb": "finbox",
+        "ga": "geldautomaat euro",
+        "gb": "geldautomaat vv",
+        "id": "ideal",
+        "kh": "kashandeling",
+        "ma": "machtiging",
+        "sb": "salarisbetaling",
+        "tb": "eigen rekening",
+        "sp": "spoedbetaling",
+        "CR": "tegoed",
+        "D": "tekort"
     }
 
     def __init__(self):
@@ -189,80 +211,45 @@ class csvfile():
         #transnr = 0
         self.fitid = {}
 
-        with open(args.csvfile, 'rb') as csvfile:
-            fieldnames = (
-                        self.keyAccount, self.keyCurrency, self.keyInterestDate,
-                        self.keyDebCredCode, self.keyAmount,
-                        self.keyCounterAcctNr, self.keyCounterAcctName,
-                        self.keyTxDate, self.keyBookCode, self.keyBudgetCode,
-                        self.keyDescr1, self.keyDescr2, self.keyDescr3,
-                        self.keyDescr4, self.keyDescr5, self.keyDescr6,
-                        self.keyTxRef, self.keyIncassantID, self.keyAuthCode
-                )
+        with open(ARGS.csvfile, 'rb') as csvfile:
+            fieldnames = (self.keyAccount, self.keyCurrency, self.keyBIC,
+                          self.keySerialNumber, self.keyTxDate, self.keyInterestDate,
+                          self.keyAmount, self.keyBalanceAfterTxn,
+                          self.keyCounterAcctNr, self.keyCounterAcctName,
+                          self.keyCounterPartyName, self.keyInitiatingPartyName,
+                          self.keyCounterPartyBIC, self.keyBookCode,
+                          self.keyBatchId, self.keyTxRef,
+                          self.keyMachtigingskenmerk, self.keyIncassantID,
+                          self.keyBetalingsKenmerk,
+                          self.keyDescr1, self.keyDescr2, self.keyDescr3,
+                          self.keyRedenRetour,
+                          self.keyOriginalAmount, self.keyOriginalCurrency,
+                          self.keyExchangeRate
+                         )
             #Open the csvfile as a Dictreader
             csvreader = csv.DictReader(csvfile, delimiter=',', quotechar='"',
-            fieldnames=fieldnames)
+                                       fieldnames=fieldnames)
+            # We have our own fieldnames, so delete the first row containing descriptions
+            # Since 1-1-2018 the csv files contain a header row as first line
             linenr = 0
             for row in csvreader:
                 linenr = linenr + 1
+                if linenr == 1:
+                    continue        # skip the first line
                 if not row:
                     continue
-                ofxData = self.create_ofx(linenr, row)
-                self.transactions.append(ofxData)
+                ofx_data = self.create_ofx(row)
+                self.transactions.append(ofx_data)
 
-    def map_account(self, row):
-        return row[self.keyAccount].replace(" ", "")
-
-    def map_transaction_type(self, row):
-        #Map debit credit into ofx TRNTYPE
-        if row[self.keyDebCredCode] in self.ofxTrnType:
-            trntype = self.ofxTrnType[row[self.keyDebCredCode]]
-        else:
-            trntype = 'UNKNOWN'
-            # TODO message of exception
-        return trntype
-
-    def map_date_posted(self, row):
-        # The DTPOSTED is in yyyymmdd format, which is compatible
-        # with ofx
-        return row[self.keyInterestDate]
-
-    def map_amount(self, row):
-        amt = row[self.keyAmount]
-        if args.convert:
-            amt = amt.replace(",", ".")
-        # The TRNAMT needs to be converted to negative if applicable
-        if row[self.keyDebCredCode] == 'C':
-            amt = amt
-        else:
-            amt = "-" + amt
-        return amt
-
-    def map_fitid(self, dcCode, trnamt, dtposted):
-        # the FITID is composed of the date and amount
-        # plus dcCode
-        # for a unique FITID, we add a sequence number per date
-        # Warning: don't spread transactions for one date accross import files!
-        # Or they will no be processed due to duplicate FITID.
-        key = dtposted + trnamt.replace(",", "").replace("-", "") \
-                .replace(".", "") + dcCode
-        sequence = 0
-        if key in self.fitid:
-            sequence = self.fitid[key]
-            sequence = sequence + 1
-        fitid = key + str(sequence)
-        self.fitid[key] = sequence
-        return fitid
-
-    def map_account_to(self, row):
-        return row[self.keyCounterAcctNr]
-
-    def create_ofx(self, linenr, row):
+    def create_ofx(self, row):
+        """ Main processor where ofx records are constructed. """
         account = self.map_account(row)
         trntype = self.map_transaction_type(row)
         dtposted = self.map_date_posted(row)
         trnamt = self.map_amount(row)
-        fitid = self.map_fitid(row[self.keyDebCredCode], trnamt, dtposted)
+        # remark: serialnumber is unique per account, but only filled for checking account
+        # later savings account will have it filled too.
+        fitid = self.map_fitid(account, row[self.keySerialNumber], trnamt, dtposted)
         accountto = self.map_account_to(row)
         (name, memo) = self.map_memo_name(row)
 
@@ -270,6 +257,87 @@ class csvfile():
                 'trntype': trntype, 'dtposted': dtposted,
                 'trnamt': trnamt, 'fitid': fitid,
                 'name': name, 'accountto': accountto, 'memo': memo}
+
+    def map_account(self, row):
+        """ map account without spaces """
+        return row[self.keyAccount].replace(" ", "")
+
+    def map_transaction_type(self, row):
+        """ map transaction type to debit and credit """
+        # Map transaction amount to trntype ('+' = 'DEBIT', '-' || '[\d]' = 'CREDIT')
+        if row[self.keyAmount].startswith('-'):
+            trntype = 'DEBIT'
+        else:
+            trntype = 'CREDIT'
+        return trntype
+
+    def map_date_posted(self, row):
+        """ map date posted without dashes """
+        # The DTPOSTED in ofx is in yyyymmddhhmmss format
+        # input is formatted in yyyy-mm-dd
+        # needs conversion
+        date = row[self.keyInterestDate]
+        pattern = re.compile(r"\-")
+        date = pattern.sub("", date)
+        return date
+
+    def map_amount(self, row):
+        """ map amount replacing comma to point or v.v. """
+        amt = row[self.keyAmount]
+        # convert to comma or point depending on arguments (default decimal point)
+        if ARGS.dec_comma:
+            amt = amt.replace(".", ",")
+        else:
+            amt = amt.replace(",", ".")
+        return amt
+
+    def map_balance(self, row):
+        """ map balance to amount replacing comma to point or v.v. """
+        amt = row[self.keyBalanceAfterTxn]
+        # convert to comma or point depending on arguments (default decimal point)
+        if ARGS.dec_comma:
+            amt = amt.replace(".", ",")
+        else:
+            amt = amt.replace(",", ".")
+        return amt
+
+    def map_fitid(self, account, volgnr, trnamt, dtposted):
+        """ Construct Fitid """
+        # the FITID is composed of the date and amount
+        # plus dcCode
+        # Since version 1 account + volgnr is sufficient for checker accounts.
+        # for a unique FITID, we add a sequence number per date
+        # Warning: don't spread transactions for one date accross import files!
+        # Or they will not be processed due to duplicate FITID.
+        if float(trnamt) >= 0:
+            dc_code = "C"
+        else:
+            dc_code = "D"
+        # before 1st Jan 2018, fitid did not have benefit of volgnr.
+        # to keep fitid compliant with history, ignore volgnr if before 2018
+        if volgnr and dtposted > "20171231":
+            key = account + volgnr
+        else:
+            key = dtposted \
+                      + trnamt.replace(",", "") \
+                              .replace(".", "") \
+                              .replace("-", "") \
+                              .replace("+", "") \
+                      + dc_code
+        # check if fitid already exists. Normally with 'volgnr' it should not.
+        sequence = 0
+        if key in self.fitid:
+            sequence = self.fitid[key]
+            sequence = sequence + 1
+        fitid = key + str(sequence)
+        # save fitid in array for later reference
+        self.fitid[key] = sequence
+        # return the now unique fitid
+        return fitid
+
+    def map_account_to(self, row):
+        """ map counter account to account_to. """
+        return row[self.keyCounterAcctNr]
 
     def map_memo_name(self, row):
         """Map several description fields to memo and construct name"""
@@ -283,15 +351,13 @@ class csvfile():
         name = row[self.keyCounterAcctNr] + glue \
                 + row[self.keyCounterAcctName]
 
-        descr = row[self.keyDescr1] + row[self.keyDescr2] \
-            + row[self.keyDescr3] + row[self.keyDescr4] \
-            + row[self.keyDescr5] + row[self.keyDescr6]
+        descr = row[self.keyDescr1] + row[self.keyDescr2] + row[self.keyDescr3]
+        descr = descr.strip()
         # For 'db' and 'ba' we create a different description
+        # For 'ac' the "betalingskenmerk" is a separate field (optional)
         if row[self.keyBookCode] == 'ba' and not name:
             name = row[self.keyDescr1]
-            descr = row[self.keyDescr2] + row[self.keyDescr3] \
-                    + row[self.keyDescr4] \
-                    + row[self.keyDescr5] + row[self.keyDescr6]
+            descr = row[self.keyDescr2] + row[self.keyDescr3]
         elif row[self.keyBookCode] == "db":
             if name:
                 glue = " "
@@ -300,17 +366,85 @@ class csvfile():
             name = "[" + row[self.keyBookCode] + "] " \
                     + self.bookcode[row[self.keyBookCode]] + glue \
                     + name
+        elif row[self.keyBookCode] == "ac":
+            descr = descr + "betalingskenmerk " + row[self.keyBetalingsKenmerk]
 
         memo = descr.replace("&", "&amp")
         return (name, memo)
 
 
-class ofxwriter():
-    def __init__(self):
-        date = datetime.date.today()
-        nowdate = str(date.strftime("%Y%m%d"))
+class OfxWriter():
+    """ class OfxWriter. """
 
-        message_header = """
+    date = datetime.date.today()
+    nowdate = str(date.strftime("%Y%m%d"))
+    csv = None
+    filename = None
+    filepath = None
+
+    def __init__(self):
+        #create path to ofxfile
+        if ARGS.outfile:
+            self.filename = ARGS.outfile
+        else:
+            self.filename = ARGS.csvfile.lower().replace("csv", "ofx")
+
+        #if directory does not exists, create it.
+        if not os.path.exists(os.path.join(os.getcwd(), ARGS.dir)):
+            os.makedirs(os.path.join(os.getcwd(), ARGS.dir))
+
+        self.filepath = os.path.join(os.getcwd(), ARGS.dir, self.filename)
+
+        #Initiate a csv object with data in list of dictionaries.
+        self.csv = CsvFile()
+
+    def run(self):
+        """ Run the generation of ofx records. """
+        #Determine unique accounts and start and end dates
+        accounts = set()
+        mindate = 999999999
+        maxdate = 0
+
+        # print some statistics:
+        print("TRANSACTIONS: " + str(len(self.csv.transactions)))
+        print("IN:           " + ARGS.csvfile)
+        print("OUT:          " + self.filename)
+
+        for trns in self.csv.transactions:
+            accounts.add(trns['account'])
+            if int(trns['dtposted']) < mindate:
+                mindate = int(trns['dtposted'])
+            if int(trns['dtposted']) > maxdate:
+                maxdate = int(trns['dtposted'])
+
+        #open ofx file, if file exists, gets overwritten
+        with open(self.filepath, 'w') as ofxfile:
+            message_header = construct_message_header(self.nowdate)
+            ofxfile.write(message_header)
+
+            # Reads the csv file 1x per account
+            # For efficiency, download one account per file
+            for account in accounts:
+                account_message_start = construct_account_start(account, mindate, maxdate)
+                ofxfile.write(account_message_start)
+
+                for trns in self.csv.transactions:
+                    if trns['account'] == account:
+                        message_transaction = construct_txn(trns)
+                        ofxfile.write(message_transaction)
+
+                account_message_end = construct_account_end()
+                ofxfile.write(account_message_end)
+
+            message_end = construct_msg_end()
+            ofxfile.write(message_end)
+
+            message_footer = construct_message_footer()
+            ofxfile.write(message_footer)
+
+def construct_message_header(date):
+    """ Construct and return the starting message for the file. """
+    message_header = """
 <OFX>
    <SIGNONMSGSRSV1>
       <SONRS>                            <!-- Begin signon -->
@@ -334,47 +468,22 @@ class ofxwriter():
          <STATUS>                     <!-- Start status aggregate -->
             <CODE>0</CODE>            <!-- OK -->
             <SEVERITY>INFO</SEVERITY>
-         </STATUS>""" % {"nowdate": nowdate}
-        #print message_header
+         </STATUS>""" % {"nowdate": date}
 
-        #create path to ofxfile
-        if args.outfile:
-            filename = args.outfile
-        else:
-            filename = args.csvfile.lower().replace("csv", "ofx")
+    return message_header
 
-        #if directory does not exists, create it.
-        if not os.path.exists(os.path.join(os.getcwd(), args.dir)):
-            os.makedirs(os.path.join(os.getcwd(), args.dir))
+def construct_message_footer():
+    """ Construct and return the ending message for the file. """
+    message_footer = """
+      </STMTTRNRS>                        <!-- End of transaction -->
+   </BANKMSGSRSV1>
+</OFX>
+      """
+    return message_footer
 
-        filepath = os.path.join(os.getcwd(), args.dir, filename)
-
-        #Initiate a csv object with data in list of dictionaries.
-        csv = csvfile()
-
-        #Determine unique accounts and start and end dates
-        accounts = set()
-        mindate = 999999999
-        maxdate = 0
-
-        #print some statistics:
-        print "TRANSACTIONS: " + str(len(csv.transactions))
-        print "IN:           " + args.csvfile
-        print "OUT:          " + filename
-
-        for trns in csv.transactions:
-            accounts.add(trns['account'])
-            if int(trns['dtposted']) < mindate:
-                mindate = int(trns['dtposted'])
-            if int(trns['dtposted']) > maxdate:
-                maxdate = int(trns['dtposted'])
-
-        #open ofx file, if file exists, gets overwritten
-        with open(filepath, 'w') as ofxfile:
-            ofxfile.write(message_header)
-
-            for account in accounts:
-                message_begin = """
+def construct_account_start(account, mindate, maxdate):
+    """ Construct and return the message containing account start message. """
+    message_begin = """
         <STMTRS>                         <!-- Begin statement response -->
            <CURDEF>EUR</CURDEF>
            <BANKACCTFROM>                <!-- Identify the account -->
@@ -385,12 +494,25 @@ class ofxwriter():
            <BANKTRANLIST>                <!-- Begin list of statement trans. -->
               <DTSTART>%(mindate)s</DTSTART>
               <DTEND>%(maxdate)s</DTEND>""" % {"account": account,
-                  "mindate": mindate, "maxdate": maxdate}
-                ofxfile.write(message_begin)
+                                               "mindate": mindate, "maxdate": maxdate}
+    return message_begin
 
-                for trns in csv.transactions:
-                    if trns['account'] == account:
-                        message_transaction = """
+def construct_account_end():
+    """ Construct and return the message containing account end message """
+    message_end = """
+              </BANKTRANLIST>                   <!-- End list of statement\
+                       trans. -->
+              <LEDGERBAL>                       <!-- Ledger balance \
+                  aggregate -->
+               <BALAMT>0</BALAMT>
+               <DTASOF>199910291120</DTASOF><!-- Bal date: 10/29/99, 11:20 am -->
+            </LEDGERBAL>                      <!-- End ledger balance -->
+         </STMTRS>"""
+    return message_end
+
+def construct_txn(trns):
+    """ Construct and return the message containing transaction message """
+    message_transaction = """
                   <STMTTRN>
                      <TRNTYPE>%(trntype)s</TRNTYPE>
                      <DTPOSTED>%(dtposted)s</DTPOSTED>
@@ -404,9 +526,11 @@ class ofxwriter():
                      </BANKACCTTO>
                      <MEMO>%(memo)s</MEMO>
                   </STMTTRN>""" % trns
-                        ofxfile.write(message_transaction)
+    return message_transaction
 
-            message_end = """
+def construct_msg_end():
+    """ Construct and return the message end of all transactions """
+    message_end = """
               </BANKTRANLIST>                   <!-- End list of statement\
                        trans. -->
               <LEDGERBAL>                       <!-- Ledger balance \
@@ -416,14 +540,9 @@ class ofxwriter():
                    11:20 am -->
             </LEDGERBAL>                      <!-- End ledger balance -->
          </STMTRS>"""
-            ofxfile.write(message_end)
+    return message_end
 
-            message_footer = """
-      </STMTTRNRS>                        <!-- End of transaction -->
-   </BANKMSGSRSV1>
-</OFX>
-      """
-            ofxfile.write(message_footer)
 
 if __name__ == "__main__":
-    ofx = ofxwriter()
+    OFX = OfxWriter()
+    OFX.run()
