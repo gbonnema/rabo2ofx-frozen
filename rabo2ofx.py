@@ -158,7 +158,7 @@ class CsvFile():
     keyCurrency = 'currency'
     keyBIC = 'BIC'
     keySerialNumber = 'serNr'
-    keyTxDate = 'txDate'
+    keyDate = 'Date'
     keyInterestDate = 'interestDate'
     keyAmount = 'amount'
     keyBalanceAfterTxn = 'balance'
@@ -213,7 +213,7 @@ class CsvFile():
 
         with open(ARGS.csvfile, 'rb') as csvfile:
             fieldnames = (self.keyAccount, self.keyCurrency, self.keyBIC,
-                          self.keySerialNumber, self.keyTxDate, self.keyInterestDate,
+                          self.keySerialNumber, self.keyDate, self.keyInterestDate,
                           self.keyAmount, self.keyBalanceAfterTxn,
                           self.keyCounterAcctNr, self.keyCounterAcctName,
                           self.keyCounterPartyName, self.keyInitiatingPartyName,

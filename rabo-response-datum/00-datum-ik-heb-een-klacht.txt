@@ -1,0 +1,22 @@
+Subject: Ik heb een klacht
+From: noreply@rabobank.nl
+Date: 4/8/18, 9:34 AM
+To: gbonnema@xs4all.nl
+
+Rabo logo
+
+Beste meneer Bonnema,
+
+Bedankt voor het doorgeven van uw klacht. We vinden het vervelend dat u niet tevreden bent over onze dienstverlening. Daarom zoeken we samen met u naar een oplossing.
+
+We hebben de volgende gegevens van u ontvangen:
+
+Uw klacht
+De download met een csv file selecteert niet op boekdatum, maar op verwerkingsdatum. Dat is erg vervelend. Als ik selecteer alle boekingen van 01-01 tm 31-12 te krijgen, dan wil ik niet dat er boekingen buiten vallen omdat de rabo rond nieuw anders verwerkt. Ik wist eerst niet waarom dit zo was (ik miste vaak boekingen rond nieuwjaar), maar ik zag in de documentatie van csv-download file (een pdf) dat de rabo dit bewust doet. Zakelijk gebruikers krijgen de "datum" op boekdatum, particulieren op verwerkingsdatum. Ik verwerk de boekingen in mijn boekhoudsysteem (Gnucash) en heb veel last van die irritante interpretatie van datum. Mijn verzoek is, kunnen jullie dit alsjeblieft aanpassen zodat bij het selecteren zeker weet dat ik alles uit die periode krijg, onafhankelijk van verwerkingsdatum?
+
+Uw verzoek/voorstel
+Zie documentatie van csv download, veld 5, datum. Graag altijd met boekdatum vullen. Zowel voor particulieren als zakelijk. De verwerkingsdatum is voor mij irrelevant, de boekdatum des te meer. Nog beter: maak twee velden: boekdatum en verwerkingsdatum. Dan ben je helder in je communicatie naar mij. Dat is beter dan inhoud te verbergen achter de vage naam "datum" en de betekenis af te laten hangen van de betekenis van de klant voor de bank. Graag een boekdatum bij csv bestanden!
+Uw gegevens
+
+<snip my personal data>
+<snip boilerplate noise>

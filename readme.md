@@ -42,9 +42,29 @@ The output file is an OFX compliant xml file that Gnucash can process.
   amount or balance date. There is no question of any logon session going on, but the OFX file needs
   the info.
 
+** Date semantics: why we use interestdate in stead of date **
+
+The Rabo has decided to present non-business users with an unusual and unnecessary problem. For business users the
+field "datum" (date) is filled with "boekdatum" (the bookingdate). This is what one expects. However, for
+non-business users the Rabo fills "datum" (date) with "verwerkingsdatum" (the date the Rabo processed the transaction). 
+These dates often differ and is not what one expects.
+
+There is no rational explanation for this difference, but there are a consequences. For users with a non-business account. 
+The first consequence is that selection is no longer based on the bookingdate, but on the processing date. For end of year payments,
+the processingdate is usually in the next year. So choosing payments for a strict period (month, quarter, year), no longer works as 
+expected. 
+
+The second consequence is that your bookkeeping will show the wrong date had I used 'datum' instead of 'rentedatum' (interestdate).
+Again, think of end of year payments. The bookkeeping program would attribute them to the wrong year.
+
+For that reason I use interestdate in stead of date. It is not what I want and it does not make sense, but the 
+Rabo forces this anomaly. I have contacted them through email april 2018. I have saved the email correspondence to date as a pdf file
+but have had no further response, neither a correction of the csv-file contents. I don't expect the Rabo bank to change anything
+unless more people complain or the problem becomes public.  
+
 ** Development **
 
 If anyone has remarks, please create an issue on the github repository gbonnema/rabo2ofx.
 If anyone feels like improving the code, please fork the repo and issue a pull request.
 
-April 2018, Guus Bonnema.
+Sept 2018, Guus Bonnema.
