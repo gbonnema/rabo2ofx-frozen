@@ -436,9 +436,6 @@ class OfxWriter():
                 account_message_end = construct_account_end()
                 ofxfile.write(account_message_end)
 
-            message_end = construct_msg_end()
-            ofxfile.write(message_end)
-
             message_footer = construct_message_footer()
             ofxfile.write(message_footer)
 
