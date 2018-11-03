@@ -525,21 +525,6 @@ def construct_txn(trns):
                   </STMTTRN>""" % trns
     return message_transaction
 
-def construct_msg_end():
-    """ Construct and return the message end of all transactions """
-    message_end = """
-              </BANKTRANLIST>                   <!-- End list of statement\
-                       trans. -->
-              <LEDGERBAL>                       <!-- Ledger balance \
-                  aggregate -->
-               <BALAMT>0</BALAMT>
-               <DTASOF>199910291120</DTASOF><!-- Bal date: 10/29/99, \
-                   11:20 am -->
-            </LEDGERBAL>                      <!-- End ledger balance -->
-         </STMTRS>"""
-    return message_end
-
-
 if __name__ == "__main__":
     OFX = OfxWriter()
     OFX.run()
