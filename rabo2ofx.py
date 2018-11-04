@@ -22,10 +22,15 @@
 #        along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 #
+# 2018-11-04 guus prevent processing transfers twice provided transactions are in the same file
+# 2018-11-03 guus Removed obsolete function
+# 2018-11-03 lvdgraaff Removed erroneous double end header in xml output
 # 2018-04-07 guus  Adapted to version 1.0 of Rabobank csv files (download from Rabobank)
 #                  New field layout and first row is header row
 # 2016-01-02 guus  Adapted to undocumented version of Rabobank csv files (exported as .txt files)
 # 
+
+# TODO: consider adding a configuration file to eliminate double transactions (i.e. transfers)
 
 """
 The intent of this script is to convert rabo csv files to ofx files. These
@@ -402,6 +407,7 @@ class OfxWriter():
         """ Run the generation of ofx records. """
         #Determine unique accounts and start and end dates
         accounts = set()
+        processed_accounts = set()
         mindate = 999999999
         maxdate = 0
 
@@ -431,13 +437,21 @@ class OfxWriter():
                 for trns in self.csv.transactions:
                     if trns['account'] == account:
                         message_transaction = construct_txn(trns)
-                        ofxfile.write(message_transaction)
+                        processed_accounts.add(trns['account'])
+                        # guard against processing transfer between accounts twice
+                        if trns['accountto'] not in processed_accounts:
+                            ofxfile.write(message_transaction)
 
                 account_message_end = construct_account_end()
                 ofxfile.write(account_message_end)
 
             message_footer = construct_message_footer()
             ofxfile.write(message_footer)
+
+            print("Accounts processed:")
+            for account in processed_accounts:
+                print("\t%s")%account
+            print("===================");
 
 def construct_message_header(date):
     """ Construct and return the starting message for the file. """
