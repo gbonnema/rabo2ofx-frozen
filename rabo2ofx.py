@@ -22,6 +22,7 @@
 #        along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 #
+# 2018-11-11 guus added config files for processing account transfers, independent of files.
 # 2018-11-04 guus prevent processing transfers twice provided transactions are in the same file
 # 2018-11-03 guus Removed obsolete function
 # 2018-11-03 lvdgraaff Removed erroneous double end header in xml output
@@ -46,9 +47,19 @@ Find the ofx specification at http://www.ofx.net/
 
 == Documentation from 2018 (current version) ==
 
+[jan 2018]
 Since approximately Jan 2018, the Rabo bank changed the layout or the
 CSV files. The layout is documented in 
 https://www.rabobank.nl/images/format-description-csv-en_29939190.pdf.
+
+[nov 2018]
+Added the layout for a config file is an ini format compliant with the python
+configparser. The default filename is "config.rabo2ofx.ini". Currently no plans to
+change the name through program options.
+
+The configfile contains one section: "[accounts]" with one entry "order=[<list of accountnumbers>].
+There will be an example configfile in the distribution so people can use this as a base for their
+own config.
 
 == Documentation until 2018 ==
 Conversion of RABO bank download csv file (comma separated).
@@ -112,6 +123,7 @@ import re
 import argparse
 import datetime
 import os
+import configparser
 
 #
 # Version history in a dict to easily present changes
@@ -126,10 +138,11 @@ HISTORY = {
     "1.02": ("Added sequence to fitid for same amount, same date.",
              "2016-01-02", "gbo"),
     "2.00 dev": ("(in development) CSV format updated to new RABO format (no docs available).",
-                 "2018-04-03", "gbo")
+                 "2018-04-03", "gbo"),
+    "2.10": ("Added config to process transfers in a reasonable manner", "2018-11-11", "gbo")
     }
 
-VERSION = "2.00 dev"
+VERSION = "2.10"
 # Needed for version argument
 VERSION_STRING = '%%(prog)s version %s (%s: [%s] %s)' % (VERSION,
                                                          HISTORY[VERSION][2],
@@ -156,6 +169,8 @@ PARSER.add_argument('--version', '-v', action='version',
 ARGS = PARSER.parse_args()
 
 
+# ********************************************************************************
+# ************** Class CsvFile     ***********************************************
 class CsvFile():
     """ Read the csv file into a list intended for ofx"""
 
@@ -377,22 +392,77 @@ class CsvFile():
         memo = descr.replace("&", "&amp")
         return (name, memo)
 
+# ************** End Class CsvFile ***********************************************
+# ********************************************************************************
+
+# ********************************************************************************
+# ************** Class Cfg         ***********************************************
+class Cfg():
+    """ class Cfg. """
+
+    config_accounts = None
+
+    def __init__(self):
+        config = configparser.ConfigParser()
+        # use default filename for now
+        configfile = "config.rabo2ofx.ini"
+        self.config_accounts = list()
+        if os.path.exists(os.path.join(os.getcwd(), configfile)):
+            config.read(configfile)
+            # store all accounts in uppercase
+            for acc in config['accounts'].values():
+                self.config_accounts.append(acc.upper())
+
+    def run(self):
+        """ dummy run section for config class """
+        print("*************** Config file ***************** ")
+        msg = "Main account."
+        for account in self.config_accounts:
+            print(account + " " + msg)
+            msg = "Subordinate to all previous accounts."
+        print
+
+    def main_accounts(self, account):
+        """ Return the main accounts in a list """
+        # if the named account is not in the config file, all accounts in the config are
+        # regarded to be transfer accounts. Remember: must be uppercase
+        main_accounts = set()
+        for acc in self.config_accounts:
+            main = acc
+            # stop when we incounter the same account
+            if main == account:
+                break;
+            main_accounts.add(main)
+
+        return main_accounts
+
+
+# ************** End Class Cfg     ***********************************************
+# ********************************************************************************
+# ************** Class OfxWriter   ***********************************************
 
 class OfxWriter():
     """ class OfxWriter. """
 
     date = datetime.date.today()
     nowdate = str(date.strftime("%Y%m%d"))
+    processed_accounts = set()
+    cfg = None
     csv = None
     filename = None
     filepath = None
 
-    def __init__(self):
+    def __init__(self, cfg):
         #create path to ofxfile
         if ARGS.outfile:
             self.filename = ARGS.outfile
         else:
             self.filename = ARGS.csvfile.lower().replace("csv", "ofx")
+
+        # Check the Config
+        if not isinstance(cfg, Cfg):
+            print "cfg is not an instance of Cfg"
+        self.cfg = cfg
 
         #if directory does not exists, create it.
         if not os.path.exists(os.path.join(os.getcwd(), ARGS.dir)):
@@ -406,8 +476,6 @@ class OfxWriter():
     def run(self):
         """ Run the generation of ofx records. """
         #Determine unique accounts and start and end dates
-        accounts = set()
-        processed_accounts = set()
         mindate = 999999999
         maxdate = 0
 
@@ -415,7 +483,10 @@ class OfxWriter():
         print("TRANSACTIONS: " + str(len(self.csv.transactions)))
         print("IN:           " + ARGS.csvfile)
         print("OUT:          " + self.filename)
+        print
 
+        accounts = set()
+        # Gather account numbers
         for trns in self.csv.transactions:
             accounts.add(trns['account'])
             if int(trns['dtposted']) < mindate:
@@ -423,7 +494,12 @@ class OfxWriter():
             if int(trns['dtposted']) > maxdate:
                 maxdate = int(trns['dtposted'])
 
-        #open ofx file, if file exists, gets overwritten
+        ctr_accounts_processed = len(accounts)
+
+        ctr_txns_processed = 0;
+        ctr_txns_skipped_transfer = 0;
+
+        #open ofx file, if file exists, it gets overwritten
         with open(self.filepath, 'w') as ofxfile:
             message_header = construct_message_header(self.nowdate)
             ofxfile.write(message_header)
@@ -434,24 +510,63 @@ class OfxWriter():
                 account_message_start = construct_account_start(account, mindate, maxdate)
                 ofxfile.write(account_message_start)
 
+                # register which accounts to ignore in acountto i.e. are transfers to
+                # earlier processed accounts
+                transfer_accounts = self.gather_transfer_accounts(account)
+                print "transfer_accounts for "+account+" = " + str(transfer_accounts)
+
                 for trns in self.csv.transactions:
                     if trns['account'] == account:
                         message_transaction = construct_txn(trns)
-                        processed_accounts.add(trns['account'])
                         # guard against processing transfer between accounts twice
-                        if trns['accountto'] not in processed_accounts:
+                        if trns['accountto'] in transfer_accounts:
+                            ctr_txns_skipped_transfer += 1
+                        else:
+                            ctr_txns_processed += 1
                             ofxfile.write(message_transaction)
 
                 account_message_end = construct_account_end()
                 ofxfile.write(account_message_end)
+                # Remember this account was already processed
+                self.processed_accounts.add(account)
 
             message_footer = construct_message_footer()
             ofxfile.write(message_footer)
 
+            print("==========================");
             print("Accounts processed:")
-            for account in processed_accounts:
+            for account in self.processed_accounts:
                 print("\t%s")%account
-            print("===================");
+            print("==========================");
+            if len(self.processed_accounts) > len(self.cfg.config_accounts):
+                print("warning: it seems you have more accounts in your file(s)")
+                print("         than in your config.")
+                print("         This carries the risk of double transfers.")
+                print("")
+                print("         Add all accounts you download to your")
+                print("         config file and rerun the program.")
+                print("         There is an example config in this directory.")
+                print("         You can find the accounts processed in the stats above.")
+                print
+                print("         The config file is called 'config.rabo2ofx.ini'.")
+                print("")
+
+    def gather_transfer_accounts(self, account):
+        """ Make sure all main accounts in config or already processed are
+        treated as transfers, i.e. ignored."""
+
+        if account in self.cfg.config_accounts:
+            transfer_accounts = self.cfg.main_accounts(account)
+        else:
+            transfer_accounts = set()
+            for acc in self.cfg.config_accounts:
+                transfer_accounts.add(acc)
+        for acc in self.processed_accounts:
+            if acc not in self.cfg.config_accounts:
+                transfer_accounts.add(acc);
+        return transfer_accounts
+
+# ************** End Class OfxWriter ***********************************************
 
 def construct_message_header(date):
     """ Construct and return the starting message for the file. """
@@ -539,6 +654,9 @@ def construct_txn(trns):
                   </STMTTRN>""" % trns
     return message_transaction
 
+
 if __name__ == "__main__":
-    OFX = OfxWriter()
+    # Cfg will have empty list if there is no config file
+    cfg = Cfg()
+    OFX = OfxWriter(cfg)
     OFX.run()

@@ -23,12 +23,49 @@ ofx. Example:
 
 The output file is an OFX compliant xml file that Gnucash can process.
 
+** Transfers: accounts in config **
+
+Since version 2.10 the program uses a config file denoting accounts to be downloaded.
+An example file is available. Be sure to register your accounts in the config.
+
+The files you download will have transactions for both accounts. Where a transfer
+from config.account1 to config.account2 is present, there will be 2 transactions:
+
+	- One from the perspective of config.account1
+	- One from the perspective of config.account2
+
+Without measures, these transactions will be registered in your ofx file twice, as different
+transactions, causing havoc in your bookkeeping systems.
+
+To prevent double transactions, for all transfers between config.account1 and config.account2,
+the program will only translate the transactions from the viewpoint of the first account in
+config. This is indepedent of whether they are in the same download or not.
+
+It means that transfers between config.account1 and config.account2 will only show up if and when
+config.account1 is downloaded (config.account1 precedes config.account2 in the config file).
+In a file with only config.account2, the transfers will be skipped, i.e. not transferred to the
+ofx file.
+
+Be sure to create a config file. An example file is present in the distribution.
+Remember: order is important.
+
+** Transfers: accounts not in config **
+
+For accounts not in config, **if they are in the same download file**, transfers will only
+produce one of two transfer transactions. These unknown accounts will *never* transfer to
+a known config account. For multiple unknown accounts, transfers between the unknown acounts
+will register only the first account processed.
+
+This is a risk, and thus the program warns if an account is in the download file, that was not
+in the config file. Please make sure to always have the accounts you download in the config file.
+
 ** Information and warnings **
 
 * The program was developed for a checking account.
 
 * The program can process multiple accounts per file. If processing gets slow, you could
   choose to download only one account per file. It reads the input once per account.
+  But beware of transfers.
 
 * The FITID up until 2018 is a construction of transaction data (amount, date etc). From 2018 the 
   Rabobank starts using a serialnumber that is unique per account.

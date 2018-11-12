@@ -102,3 +102,5 @@ ENV/
 
 # personal stuff
 2018-*-transactions*
+config.rabo2ofx.ini
+*.swp
