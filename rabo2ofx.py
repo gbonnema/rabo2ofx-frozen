@@ -22,6 +22,7 @@
 #        along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 #
+# 2018-11-xx guus added minor statistics
 # 2018-11-11 guus added config files for processing account transfers, independent of files.
 # 2018-11-04 guus prevent processing transfers twice provided transactions are in the same file
 # 2018-11-03 guus Removed obsolete function
@@ -117,13 +118,14 @@ are not always filled.
 
 
 """
-
+import sys
 import csv
 import re
 import argparse
 import datetime
 import os
 import configparser
+
 
 #
 # Version history in a dict to easily present changes
@@ -139,10 +141,11 @@ HISTORY = {
              "2016-01-02", "gbo"),
     "2.00 dev": ("(in development) CSV format updated to new RABO format (no docs available).",
                  "2018-04-03", "gbo"),
-    "2.10": ("Added config to process transfers in a reasonable manner", "2018-11-11", "gbo")
+    "2.10": ("Added config to process transfers in a reasonable manner", "2018-11-11", "gbo"),
+    "2.11": ("Added minor statistic figures to output")
     }
 
-VERSION = "2.10"
+VERSION = "2.11"
 # Needed for version argument
 VERSION_STRING = '%%(prog)s version %s (%s: [%s] %s)' % (VERSION,
                                                          HISTORY[VERSION][2],
@@ -461,7 +464,7 @@ class OfxWriter():
 
         # Check the Config
         if not isinstance(cfg, Cfg):
-            print "cfg is not an instance of Cfg"
+            print ("cfg is not an instance of Cfg")
         self.cfg = cfg
 
         #if directory does not exists, create it.
@@ -485,10 +488,18 @@ class OfxWriter():
         print("OUT:          " + self.filename)
         print
 
-        accounts = set()
+        accounts = dict()
         # Gather account numbers
         for trns in self.csv.transactions:
-            accounts.add(trns['account'])
+            accNr = trns['account']
+            if accounts.has_key(accNr):
+                account_rec = accounts[accNr]
+            else:
+                account_rec = dict()
+                account_rec['txn_ctr'] = 0
+                account_rec['txn_skip'] = 0
+                account_rec['txn_processed'] = 0
+                accounts[accNr] = account_rec
             if int(trns['dtposted']) < mindate:
                 mindate = int(trns['dtposted'])
             if int(trns['dtposted']) > maxdate:
@@ -504,8 +515,8 @@ class OfxWriter():
             message_header = construct_message_header(self.nowdate)
             ofxfile.write(message_header)
 
-            # Reads the csv file 1x per account
-            # For efficiency, download one account per file
+            # Check all transactions once for each account
+            # so the OFX xml can be ordered per account
             for account in accounts:
                 account_message_start = construct_account_start(account, mindate, maxdate)
                 ofxfile.write(account_message_start)
@@ -513,16 +524,16 @@ class OfxWriter():
                 # register which accounts to ignore in acountto i.e. are transfers to
                 # earlier processed accounts
                 transfer_accounts = self.gather_transfer_accounts(account)
-                print "transfer_accounts for "+account+" = " + str(transfer_accounts)
 
                 for trns in self.csv.transactions:
                     if trns['account'] == account:
                         message_transaction = construct_txn(trns)
+                        accounts[account]['txn_ctr'] += 1
                         # guard against processing transfer between accounts twice
                         if trns['accountto'] in transfer_accounts:
-                            ctr_txns_skipped_transfer += 1
+                            accounts[account]['txn_skip'] += 1
                         else:
-                            ctr_txns_processed += 1
+                            accounts[account]['txn_processed'] += 1
                             ofxfile.write(message_transaction)
 
                 account_message_end = construct_account_end()
@@ -533,11 +544,12 @@ class OfxWriter():
             message_footer = construct_message_footer()
             ofxfile.write(message_footer)
 
-            print("==========================");
-            print("Accounts processed:")
-            for account in self.processed_accounts:
-                print("\t%s")%account
-            print("==========================");
+            # Check accounts processed versus found accounts
+            print(    "\taccountnumber     processed  skip   sum")
+            for account in accounts:
+                sys.stdout.write('\t%s '% account)      # prevent '\n'
+                print("%(txn_processed)8d %(txn_skip)5d %(txn_ctr)5d")%accounts[account]
+            print ("\t-")
             if len(self.processed_accounts) > len(self.cfg.config_accounts):
                 print("warning: it seems you have more accounts in your file(s)")
                 print("         than in your config.")
