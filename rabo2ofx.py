@@ -142,7 +142,7 @@ HISTORY = {
     "2.00 dev": ("(in development) CSV format updated to new RABO format (no docs available).",
                  "2018-04-03", "gbo"),
     "2.10": ("Added config to process transfers in a reasonable manner", "2018-11-11", "gbo"),
-    "2.11": ("Added minor statistic figures to output")
+    "2.11": ("Added minor statistic", "2018-11-14", "gbo")
     }
 
 VERSION = "2.11"
