@@ -1,0 +1,42 @@
+.\" Manpage for rabo2ofx.py. 
+.\" Author Guus Bonnema, github user gbonnema.
+.TH rabo2ofx.py 1 "11 Feb 2019" "version 2.11"
+.SH NAME
+rabo2ofx.py - Convert Dutch Rabo csv files to ofx for GnuCash
+.SH SYNOPSIS
+rabo2ofx.py FILENAME
+.SH DESCRIPTION
+This program converts Dutch .csv files from the Rabo bank to OFX files 
+for GnuCash. 
+.SS Config
+
+The program uses a config file that contains the account numbers 
+with most important accounts first. An example config should have been
+copied into your distribution. If not, the layout is simple:
+.nf
+
+[account]
+account1 = nl89rabo999999
+account2 = nl71rabo888888
+.PP
+Be careful to put the config in the directory from which you execute the program.
+In future I might change this to being a hidden file in the home directory.
+.SS Config processing
+The config is important for processing transfers between accounts you 
+control. If you don't enter the accounts in the config, then you might
+end up with duplicate transactions (one from each account). Should both transactions
+be in the same file, only the first account encountered will be processed, the transfers
+from the second to the first will be ignored. If the accounts are in different
+files, transfers will occur in both ofx files and thus might end up as
+duplicates in your GnuCash administration.
+
+.SH BUGS
+Rabo misuses a data field called 'datum' (=date) to place the Rabo processing 
+date for consumers and the booking date for professional customers. Due to
+this unfortunate choice, the program uses the interestdate to determine the 
+bookingdate.
+.PP
+Should the Rabo ever change its policy to include both booking date and 
+processingdate, I will change the program to use the booking date.
+.SH AUTHOR
+Guus Bonnema, contact me through github.com, user gbonnema, repo rabo2ofx.
