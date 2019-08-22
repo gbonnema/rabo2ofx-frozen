@@ -1,4 +1,4 @@
-* Rabo2ofx *
+# Rabo2ofx
 
 This program converts the Dutch rabo csv file for non-business
 customers to the financial records of OFX for GnuCash or for HomeBank.
@@ -7,7 +7,7 @@ The csv file is available for download for each customer.
 I release this software under Copyright and with the user license of GPL version 3 of which the 
 text accompanies the software.
 
-** Use **
+## Use
 
 Open a terminal in the directory where you downloaded the csv file.
 Then use the program on that file. It will create an OFX formatted file
@@ -32,7 +32,7 @@ OUT:          2018-008-transactions-30-12-to-26-09.ofx
 
 The output file is an OFX compliant xml file that GnuCash or HomeBank can process.
 
-** Difference between GnuCash and HomeBank
+**Difference between GnuCash and HomeBank
 
 HomeBank needs all transactions, including the "internal transfers". It then concludes
 which transactions are internal transfers. 
@@ -41,7 +41,7 @@ GnuCash will not automatically recognize internal transfers and these transactio
 will be included into the system twice. As this is undesirable, for GnuCash the system
 automatically skips transactions for the subordinate accounts to or from the main accounts.
 
-** Transfers: accounts in config **
+## Transfers: accounts in config 
 
 *Remark: only for GnuCash*
 
@@ -69,7 +69,7 @@ ofx file.
 Be sure to create a config file. An example file is present in the distribution.
 Remember: order is important.
 
-** Transfers: accounts not in config **
+## Transfers: accounts not in config 
 
 For accounts not in config, **if they are in the same download file**, transfers will only
 produce one of two transfer transactions. These unknown accounts will *never* transfer to
@@ -79,7 +79,7 @@ will register only the first account processed.
 This is a risk, and thus the program warns if an account is in the download file, that was not
 in the config file. Please make sure to always have the accounts you download in the config file.
 
-** Information and warnings **
+## Information and warnings
 
 * The program was developed for a checking account.
 
@@ -100,7 +100,7 @@ in the config file. Please make sure to always have the accounts you download in
   amount or balance date. There is no question of any logon session going on, but the OFX file needs
   the info.
 
-** Date semantics: why we use interestdate in stead of date **
+## Date semantics: why we use interestdate in stead of date 
 
 The Rabo has decided to present non-business users with an unusual and unnecessary problem. For business users the
 field "datum" (date) is filled with "boekdatum" (the bookingdate). This is what one expects. However, for
@@ -125,7 +125,7 @@ but have had no further response, neither a correction of the csv-file contents.
 expect the Rabo bank to care enough to change anything unless more people complain or 
 the problem becomes public. Public image sometimes can sway corporations where customers can not.
 
-** Development **
+## Development
 
 If anyone has remarks, please create an issue on the github repository gbonnema/rabo2ofx.
 If anyone feels like improving the code, please fork the repo and issue a pull request.
