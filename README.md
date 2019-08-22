@@ -71,6 +71,8 @@ Remember: order is important.
 
 ## Transfers: accounts not in config 
 
+*Remark: only for GnuCash*
+
 For accounts not in config, **if they are in the same download file**, transfers will only
 produce one of two transfer transactions. These unknown accounts will *never* transfer to
 a known config account. For multiple unknown accounts, transfers between the unknown acounts
