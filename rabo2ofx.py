@@ -21,7 +21,10 @@
 #        You should have received a copy of the GNU General Public License
 #        along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
-#
+# 
+# 2019-08-21 guus adding option for homebank to not skip internal transactions
+#                 corrected argument processing
+#                 no longer force filename to lowercase.
 # 2018-11-xx guus added minor statistics
 # 2018-11-11 guus added config files for processing account transfers, independent of files.
 # 2018-11-04 guus prevent processing transfers twice provided transactions are in the same file
@@ -32,12 +35,14 @@
 # 2016-01-02 guus  Adapted to undocumented version of Rabobank csv files (exported as .txt files)
 # 
 
-# TODO: consider adding a configuration file to eliminate double transactions (i.e. transfers)
-
 """
 The intent of this script is to convert rabo csv files to ofx files. These
-csv file you can download when logged in to www.rabo.nl as customer of Rabo.
-The intention is to create OFX files for GnuCash (www.gnucash.org).
+csv files you can download when logged in to www.rabo.nl as customer of Rabo.
+The intention is to create OFX files for GnuCash (www.gnucash.org) and if requested
+for homebank. The difference between GnuCash and HomeBank is that rabo2ofx will
+only generate *one* transaction for an internal transfer for GnuCash and 2 transactions
+for an internal transfer for HomeBank. HomeBank has the ability to conclude that it
+is an internal transfer by matching the two transactions.
 
 This script is adapted from ing2ofx.py by Arie van Dobben (Copyright 2013) which
 in turn is based on pb2ofx.pl Copyright 2008, 2009, 2010 Peter Vermaas,
@@ -46,7 +51,11 @@ which is now dead.
 
 Find the ofx specification at http://www.ofx.net/
 
-== Documentation from 2018 (current version) ==
+== Documentation ==
+
+[aug 2019]
+Decided to use HomeBank next to GnuCash. For homebank the program needs to
+emit all transactions, irrespective of being internal transfer or not.
 
 [jan 2018]
 Since approximately Jan 2018, the Rabo bank changed the layout or the
@@ -142,10 +151,11 @@ HISTORY = {
     "2.00 dev": ("(in development) CSV format updated to new RABO format (no docs available).",
                  "2018-04-03", "gbo"),
     "2.10": ("Added config to process transfers in a reasonable manner", "2018-11-11", "gbo"),
-    "2.11": ("Added minor statistic", "2018-11-14", "gbo")
+    "2.11": ("Added minor statistic", "2018-11-14", "gbo"),
+    "2.12": ("Added homebank option", "2019-08-21", "gbo")
     }
 
-VERSION = "2.11"
+VERSION = "2.12"
 # Needed for version argument
 VERSION_STRING = '%%(prog)s version %s (%s: [%s] %s)' % (VERSION,
                                                          HISTORY[VERSION][2],
@@ -157,14 +167,17 @@ PARSER = argparse.ArgumentParser(prog='rabo2ofx',
                                  description="""
     The intent of this script is to convert rabo csv files to ofx files. These
     csv files you can download when logged in to www.rabo.nl as customer of Rabo.
-    The intention is to create OFX files for GnuCash (www.gucash.org).
+    The intention is to create OFX files for GnuCash (www.gucash.org) or HomeBank.
+    Remark: HomeBank has all transactions. GnuCash skips one side of internal transfer.
                                  """)
 PARSER.add_argument('csvfile', help='A csvfile to process')
-PARSER.add_argument('-o, --outfile', dest='outfile',
+PARSER.add_argument('--outfile', '-o', dest='outfile',
                     help='Output filename', default=None)
-PARSER.add_argument('-d, --directory', dest='dir',
-                    help='Directory to store output, default is ./ofx', default='ofx')
-PARSER.add_argument('-c, --comma', dest='dec_comma',
+PARSER.add_argument('--directory','-d', dest='dir',
+                    help='Directory to store output, default is ./ofx, ofx_hb for HomeBank', default='ofx')
+PARSER.add_argument('--homebank', '-H', dest='homebank', action='store_true',
+                    help='Generate ofx file for HomeBank application')
+PARSER.add_argument('--comma', '-c', dest='dec_comma',
                     help="Convert decimal point to decimal comma, default is decimal_point",
                     action='store_true')
 PARSER.add_argument('--version', '-v', action='version',
@@ -454,24 +467,31 @@ class OfxWriter():
     csv = None
     filename = None
     filepath = None
+    dir = None
 
     def __init__(self, cfg):
         #create path to ofxfile
         if ARGS.outfile:
             self.filename = ARGS.outfile
         else:
-            self.filename = ARGS.csvfile.lower().replace("csv", "ofx")
+            self.filename = re.sub("\.[cC][sS][vV]$", ".ofx", ARGS.csvfile)
 
         # Check the Config
         if not isinstance(cfg, Cfg):
             print ("cfg is not an instance of Cfg")
         self.cfg = cfg
 
+        if ARGS.homebank:
+            dir = 'ofx_hb'
+        else:
+            dir = ARGS.dir
         #if directory does not exists, create it.
-        if not os.path.exists(os.path.join(os.getcwd(), ARGS.dir)):
-            os.makedirs(os.path.join(os.getcwd(), ARGS.dir))
+        if not os.path.exists(os.path.join(os.getcwd(), dir)):
+            os.makedirs(os.path.join(os.getcwd(), dir))
 
-        self.filepath = os.path.join(os.getcwd(), ARGS.dir, self.filename)
+        self.dir = dir
+
+        self.filepath = os.path.join(os.getcwd(), dir, self.filename)
 
         #Initiate a csv object with data in list of dictionaries.
         self.csv = CsvFile()
@@ -482,7 +502,14 @@ class OfxWriter():
         mindate = 999999999
         maxdate = 0
 
+        if ARGS.homebank:
+            version_type = 'HomeBank'
+        else:
+            version_type = 'GnuCash'
+
         # print some statistics:
+        print("           Output to " + self.dir + " (" + version_type + " version)" )
+        print
         print("TRANSACTIONS: " + str(len(self.csv.transactions)))
         print("IN:           " + ARGS.csvfile)
         print("OUT:          " + self.filename)
@@ -529,8 +556,8 @@ class OfxWriter():
                     if trns['account'] == account:
                         message_transaction = construct_txn(trns)
                         accounts[account]['txn_ctr'] += 1
-                        # guard against processing transfer between accounts twice
-                        if trns['accountto'] in transfer_accounts:
+                        # guard against processing transfer between accounts twice for GnuCash
+                        if trns['accountto'] in transfer_accounts and not ARGS.homebank:
                             accounts[account]['txn_skip'] += 1
                         else:
                             accounts[account]['txn_processed'] += 1
@@ -553,7 +580,7 @@ class OfxWriter():
             if len(self.processed_accounts) > len(self.cfg.config_accounts):
                 print("warning: it seems you have more accounts in your file(s)")
                 print("         than in your config.")
-                print("         This carries the risk of double transfers.")
+                print("         This carries the risk of double transfers if you use GnuCash.")
                 print("")
                 print("         Add all accounts you download to your")
                 print("         config file and rerun the program.")

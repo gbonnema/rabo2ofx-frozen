@@ -104,3 +104,4 @@ ENV/
 2018-*-transactions*
 config.rabo2ofx.ini
 *.swp
+test-dir

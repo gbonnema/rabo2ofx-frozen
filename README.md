@@ -1,8 +1,8 @@
 * Rabo2ofx *
 
 This program converts the Dutch rabo csv file for non-business
-customers to the financial records of OFX which Gnucash
-can process. The csv file is available for download for each customer.
+customers to the financial records of OFX for GnuCash or for HomeBank.
+The csv file is available for download for each customer.
 
 I release this software under Copyright and with the user license of GPL version 3 of which the 
 text accompanies the software.
@@ -11,19 +11,39 @@ text accompanies the software.
 
 Open a terminal in the directory where you downloaded the csv file.
 Then use the program on that file. It will create an OFX formatted file
-in the subdirectory ofx with the same filename and extension of csv replaced by
-ofx. Example:
+in a subdirectory with the same filename and extension of csv replaced by
+ofx. The directory can be explicitly specified through the argument -d or --directory 
+or it has `ofx` as default. For HomeBank it has `ofx_hb` as default.
+Example (GnuCash):
 
-    $ ls -l
-    -rw-rw-r--. 1 gbonnema gbonnema 104392 Jan 27 11:05 2017-004-transactions-01-01-to-05-01.csv
-	$ ./rabo2ofx 2017-004-transactions-01-01-to-05-01.csv
-    TRANSACTIONS: 425
-    IN:           2017-004-transactions-01-01-to-05-01.csv
-    OUT:          2017-004-transactions-01-01-to-05-01.ofx
+```
 
-The output file is an OFX compliant xml file that Gnucash can process.
+           Output to ofx (GnuCash version)
+
+TRANSACTIONS: 248
+IN:           2018-008-transactions-30-12-to-26-09.csv
+OUT:          2018-008-transactions-30-12-to-26-09.ofx
+
+	accountnumber     processed  skip   sum
+	NL01RABO0123456789        1    16    17
+	NL02RABO9876543210      231     0   231
+	-
+```
+
+The output file is an OFX compliant xml file that GnuCash or HomeBank can process.
+
+** Difference between GnuCash and HomeBank
+
+HomeBank needs all transactions, including the "internal transfers". It then concludes
+which transactions are internal transfers. 
+
+GnuCash will not automatically recognize internal transfers and these transactions
+will be included into the system twice. As this is undesirable, for GnuCash the system
+automatically skips transactions for the subordinate accounts to or from the main accounts.
 
 ** Transfers: accounts in config **
+
+*Remark: only for GnuCash*
 
 Since version 2.10 the program uses a config file denoting accounts to be downloaded.
 An example file is available. Be sure to register your accounts in the config.
@@ -71,9 +91,10 @@ in the config file. Please make sure to always have the accounts you download in
   Rabobank starts using a serialnumber that is unique per account.
 
 * The file assumes each account is a checking account. This may not be true for all
-  your accounts, but the program has no way of knowing this. There is no configuration data.
+  your accounts, but the program has no way of knowing this. 
 
-* The default directory is ofx. If you want to change this, look for default=ofx in the source code.
+* The default directory is ofx. You can specify a different directory in the argument '-d'. The
+  default for HomeBank is `ofx_hb`.
 
 * Some of the OFX entered data is fake, like signon-data and at the end of each account balance
   amount or balance date. There is no question of any logon session going on, but the OFX file needs
@@ -84,20 +105,25 @@ in the config file. Please make sure to always have the accounts you download in
 The Rabo has decided to present non-business users with an unusual and unnecessary problem. For business users the
 field "datum" (date) is filled with "boekdatum" (the bookingdate). This is what one expects. However, for
 non-business users the Rabo fills "datum" (date) with "verwerkingsdatum" (the date the Rabo processed the transaction). 
-These dates often differ and is not what one expects.
+These dates often differ and is not what one expects or would want for a bookkeeping system.
 
-There is no rational explanation for this difference, but there are a consequences. For users with a non-business account. 
-The first consequence is that selection is no longer based on the bookingdate, but on the processing date. For end of year payments,
-the processingdate is usually in the next year. So choosing payments for a strict period (month, quarter, year), no longer works as 
-expected. 
+There is no rational explanation for this difference, but there are consequences for users 
+with a non-business account. 
+The first consequence is that selection is no longer based on the bookingdate, but 
+on the processing date. For end of year payments, the processingdate is usually 
+the next year. So selecting payments for a strict period (month, quarter, year), 
+no longer works as expected. 
 
-The second consequence is that your bookkeeping will show the wrong date had I used 'datum' instead of 'rentedatum' (interestdate).
+The second consequence is that your bookkeeping will show the wrong date 
+had I used 'datum' instead of 'rentedatum' (interestdate).
 Again, think of end of year payments. The bookkeeping program would attribute them to the wrong year.
 
 For that reason I use interestdate in stead of date. It is not what I want and it does not make sense, but the 
-Rabo forces this anomaly. I have contacted them through email april 2018. I have saved the email correspondence to date as a pdf file
-but have had no further response, neither a correction of the csv-file contents. I don't expect the Rabo bank to change anything
-unless more people complain or the problem becomes public.  
+Rabo forces this anomaly. I have contacted them through email april 2018. 
+I have saved the email correspondence to date as a pdf file
+but have had no further response, neither a correction of the csv-file contents. I don't 
+expect the Rabo bank to care enough to change anything unless more people complain or 
+the problem becomes public. Public image sometimes can sway corporations where customers can not.
 
 ** Development **
 
