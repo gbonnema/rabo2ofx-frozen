@@ -32,7 +32,7 @@ OUT:          2018-008-transactions-30-12-to-26-09.ofx
 
 The output file is an OFX compliant xml file that GnuCash or HomeBank can process.
 
-**Difference between GnuCash and HomeBank
+## Difference between GnuCash and HomeBank
 
 HomeBank needs all transactions, including the "internal transfers". It then concludes
 which transactions are internal transfers. 
