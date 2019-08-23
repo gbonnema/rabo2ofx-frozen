@@ -89,26 +89,34 @@ quotes. The current (sept 2015) csv file contains the following fields:
     24        alfanum    6       The name for the counter account number
     08        date       7       The transaction date, format: EEYYMMDD
     02        alfanum    8       Booking code. Currently values are:
-                                ac = acceptgiro,
-                                ba = betaalautomaat,
-                                bc = betalen contactloos,
-                                bg = bankgiro opdracht,
-                                cb = crediteuren betaling,
-                                ck = chipknip,
-                                db = diverse boekingen,
-                                eb = bedrijven euro-incasso,
-                                ei = euro-incasso,
-                                fb = finbox,
-                                ga = geldautomaat euro,
-                                gb = geldautomaat vv,
-                                id = ideal,
-                                kh = kashandeling,
-                                ma = machtiging,
-                                sb = salarisbetaling,
-                                tb = eigen rekening,
-                                sp = spoedbetaling,
-                                CR = tegoed,
-                                D  = tekort
+
+    code | description            | OFX code
+    -----|------------------------|---------------------
+    ac   | acceptgiro             | 
+    ba   | betaalautomaat         |
+    bc   | betalen contactloos    |
+    bg   | bankgiro opdracht      |
+    cb   | crediteuren betaling   | 
+    ck   | chipknip               |
+    db   | diverse boekingen      |
+    eb   | bedrijven euro-incasso |
+    ei   | euro incasso           |
+    fb   | finbox                 |
+    ga   | geldautomaat euro      |
+    gb   | geldautomaat vv        |
+    id   | ideal                  |
+    kh   | kashandeling           |
+    ma   | machtiging             |
+    sb   | salaris betaling       |
+    tb   | eigen rekening         |
+    sp   | spoedbetaling          |
+    CR   | tegoed                 |
+    D    | tekort                 |
+
+    Currently the program assigns DEBIT or CREDIT as OFX code depending on the sign.
+    These are generic codes, that will be replaced by specific codes somewhere in the
+    future
+
     06        alfanum 9           Budgetcode, a free field for budgetting
     32 x 6    alfanum 10 - 15     Description: 6 fields.
                                   For [ba] (betaalautomaat) descr[0] is often
@@ -152,10 +160,11 @@ HISTORY = {
                  "2018-04-03", "gbo"),
     "2.10": ("Added config to process transfers in a reasonable manner", "2018-11-11", "gbo"),
     "2.11": ("Added minor statistic", "2018-11-14", "gbo"),
-    "2.12": ("Added homebank option", "2019-08-21", "gbo")
+    "2.12": ("Added homebank option", "2019-08-21", "gbo"),
+    "2.12.1": ("Added minor edits and docs", "2019-08-23", "gbo")
     }
 
-VERSION = "2.12"
+VERSION = "2.12.1"
 # Needed for version argument
 VERSION_STRING = '%%(prog)s version %s (%s: [%s] %s)' % (VERSION,
                                                          HISTORY[VERSION][2],
@@ -168,7 +177,7 @@ PARSER = argparse.ArgumentParser(prog='rabo2ofx',
     The intent of this script is to convert rabo csv files to ofx files. These
     csv files you can download when logged in to www.rabo.nl as customer of Rabo.
     The intention is to create OFX files for GnuCash (www.gucash.org) or HomeBank.
-    Remark: HomeBank has all transactions. GnuCash skips one side of internal transfer.
+    Remark: HomeBank gets all transactions. GnuCash skips one side of an internal transfer.
                                  """)
 PARSER.add_argument('csvfile', help='A csvfile to process')
 PARSER.add_argument('--outfile', '-o', dest='outfile',

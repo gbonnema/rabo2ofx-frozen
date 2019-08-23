@@ -7,7 +7,7 @@ rabo2ofx.py - Convert Dutch Rabo csv files to ofx for GnuCash
 rabo2ofx.py FILENAME
 .SH DESCRIPTION
 This program converts Dutch .csv files from the Rabo bank to OFX files 
-for GnuCash. 
+for GnuCash or for HomeBank.
 .SS Config
 
 The program uses a config file that contains the account numbers 
@@ -20,15 +20,63 @@ account1 = nl89rabo999999
 account2 = nl71rabo888888
 .PP
 Be careful to put the config in the directory from which you execute the program.
-In future I might change this to being a hidden file in the home directory.
-.SS Config processing
-The config is important for processing transfers between accounts you 
-control. If you don't enter the accounts in the config, then you might
-end up with duplicate transactions (one from each account). Should both transactions
-be in the same file, only the first account encountered will be processed, the transfers
-from the second to the first will be ignored. If the accounts are in different
-files, transfers will occur in both ofx files and thus might end up as
-duplicates in your GnuCash administration.
+In future this might change,but at the moment different files could have different 
+configurations, so the current directory is leading.
+
+.SS Config processing GnuCash
+
+The config was created to understand which accounts are owned. This started with
+a requirement stemming from GnuCash that does not recognize an internal transfer
+and registers the transaction twice. 
+
+The order in config is significant: transactions from earlier accounts to later 
+accounts are the only transactions that will make it into
+the OFX generated file. The transactions from later accounts to earlier accouns will never
+be generated. This prevents double transactions in GnuCash.
+
+.SS No config for GnuCash
+
+As an extra measure for GnuCash users, without config, should two accounts be in the 
+same file, then any transfers *in the same file* will only generate the first of the two.
+This gives a limited amount of protection. 
+
+If the transfer is split over files, both transactions will be generated as OFX transactions 
+creating double transactions. 
+
+.SS Config processing HomeBank
+
+HomeBank users are able to recognize internal transfers and mark them as such. For
+HomeBank users all transactions from all accounts are generated irrespective of config. 
+
+.SS Processing of booking code
+
+
+    code | description            | OFX code
+    -----|------------------------|---------------------
+    ac   | acceptgiro             | 
+    ba   | betaalautomaat         |
+    bc   | betalen contactloos    |
+    bg   | bankgiro opdracht      |
+    cb   | crediteuren betaling   | 
+    ck   | chipknip               |
+    db   | diverse boekingen      |
+    eb   | bedrijven euro-incasso |
+    ei   | euro incasso           |
+    fb   | finbox                 |
+    ga   | geldautomaat euro      |
+    gb   | geldautomaat vv        |
+    id   | ideal                  |
+    kh   | kashandeling           |
+    ma   | machtiging             |
+    sb   | salaris betaling       |
+    tb   | eigen rekening         |
+    sp   | spoedbetaling          |
+    CR   | tegoed                 |
+    D    | tekort                 |
+
+    Currently the program assigns DEBIT or CREDIT as OFX code depending on the sign.
+    These are generic codes, that will be replaced by specific codes somewhere in the
+    future.
 
 .SH BUGS
 Rabo misuses a data field called 'datum' (=date) to place the Rabo processing 
