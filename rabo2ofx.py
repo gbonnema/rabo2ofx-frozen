@@ -90,32 +90,30 @@ quotes. The current (sept 2015) csv file contains the following fields:
     08        date       7       The transaction date, format: EEYYMMDD
     02        alfanum    8       Booking code. Currently values are:
 
-    code | description            | OFX code
+    code | description            | OFX 'TXNTYPE'
     -----|------------------------|---------------------
-    ac   | acceptgiro             | 
-    ba   | betaalautomaat         |
-    bc   | betalen contactloos    |
-    bg   | bankgiro opdracht      |
-    cb   | crediteuren betaling   | 
-    ck   | chipknip               |
-    db   | diverse boekingen      |
-    eb   | bedrijven euro-incasso |
-    ei   | euro incasso           |
+    ac   | acceptgiro             | XFER
+    ba   | betaalautomaat         | POS
+    bc   | betalen contactloos    | POS
+    bg   | bankgiro opdracht      | XFER
+    cb   | crediteuren betaling   | XFER
+    ck   | chipknip               | POS
+    db   | diverse boekingen      | OTHER
+    eb   | bedrijven euro-incasso | DIRECTDEBIT
+    ei   | euro incasso           | DIRECTDEBIT
     fb   | finbox                 |
-    ga   | geldautomaat euro      |
-    gb   | geldautomaat vv        |
-    id   | ideal                  |
-    kh   | kashandeling           |
-    ma   | machtiging             |
-    sb   | salaris betaling       |
-    tb   | eigen rekening         |
+    ga   | geldautomaat euro      | ATM
+    gb   | geldautomaat vv        | ATM
+    id   | ideal                  | PAYMENT
+    kh   | kashandeling           | 
+    ma   | machtiging             | DIRECTDEBIT
+    sb   | salaris betaling       | XFER
+    tb   | eigen rekening         | XFER
     sp   | spoedbetaling          |
     CR   | tegoed                 |
     D    | tekort                 |
 
-    Currently the program assigns DEBIT or CREDIT as OFX code depending on the sign.
-    These are generic codes, that will be replaced by specific codes somewhere in the
-    future
+    The program assigns DEBIT or CREDIT as OFX TXNTYPE for all codes left blank.
 
     06        alfanum 9           Budgetcode, a free field for budgetting
     32 x 6    alfanum 10 - 15     Description: 6 fields.
@@ -161,10 +159,11 @@ HISTORY = {
     "2.10": ("Added config to process transfers in a reasonable manner", "2018-11-11", "gbo"),
     "2.11": ("Added minor statistic", "2018-11-14", "gbo"),
     "2.12": ("Added homebank option", "2019-08-21", "gbo"),
-    "2.12.1": ("Added minor edits and docs", "2019-08-23", "gbo")
+    "2.12.1": ("Added minor edits and docs", "2019-08-23", "gbo"),
+    "2.13": ("Added OFX booking codes", "2019-08-23", "gbo"),
     }
 
-VERSION = "2.12.1"
+VERSION = "2.13"
 # Needed for version argument
 VERSION_STRING = '%%(prog)s version %s (%s: [%s] %s)' % (VERSION,
                                                          HISTORY[VERSION][2],
@@ -310,7 +309,37 @@ class CsvFile():
     def map_transaction_type(self, row):
         """ map transaction type to debit and credit """
         # Map transaction amount to trntype ('+' = 'DEBIT', '-' || '[\d]' = 'CREDIT')
-        if row[self.keyAmount].startswith('-'):
+        if row[self.keyBookCode] == 'ac':
+            trntype = 'XFER'
+        elif row[self.keyBookCode] == 'ba':
+            trntype = 'POS'
+        elif row[self.keyBookCode] == 'bc':
+            trntype = 'POS'
+        elif row[self.keyBookCode] == 'bg':
+            trntype = 'XFER'
+        elif row[self.keyBookCode] == 'cb':
+            trntype = 'XFER'
+        elif row[self.keyBookCode] == 'ck':
+            trntype = 'POS'
+        elif row[self.keyBookCode] == 'db':
+            trntype = 'OTHER'
+        elif row[self.keyBookCode] == 'eb':
+            trntype = 'DIRECTDEBIT'
+        elif row[self.keyBookCode] == 'ei':
+            trntype = 'DIRECTDEBIT'
+        elif row[self.keyBookCode] == 'ga':
+            trntype = 'ATM'
+        elif row[self.keyBookCode] == 'gb':
+            trntype = 'ATM'
+        elif row[self.keyBookCode] == 'id':
+            trntype = 'PAYMENT'
+        elif row[self.keyBookCode] == 'ma':
+            trntype = 'DIRECTDEBIT'
+        elif row[self.keyBookCode] == 'sb':
+            trntype = 'XFER'
+        elif row[self.keyBookCode] == 'tb':
+            trntype = 'XFER'
+        elif row[self.keyAmount].startswith('-'):
             trntype = 'DEBIT'
         else:
             trntype = 'CREDIT'
