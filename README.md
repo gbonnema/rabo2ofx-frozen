@@ -132,4 +132,18 @@ the problem becomes public. Public image sometimes can sway corporations where c
 If anyone has remarks, please create an issue on the github repository gbonnema/rabo2ofx.
 If anyone feels like improving the code, please fork the repo and issue a pull request.
 
-Sept 2018, Guus Bonnema.
+## Installing on Linux
+
+I usually just copy the python script `rabo2ofx.py` to `/usr/local/bin` and the man page in the man
+subdirectory `rabo2ofx.1` to `/usr/local/man/man1` and then I am done with it.
+
+There is no need to compile or build anything as `python` is a script interpreter.
+
+## Installing on Windows
+
+I have no idea whether this program will run on ms windows. It should, but I haven't tested it.
+Also, I guess the man page is irrelevant to ms-windows.
+
+If you are running linux on ms-windows, in theory you should be able to use the linux instruction.
+
+Sept 2019, Guus Bonnema.
