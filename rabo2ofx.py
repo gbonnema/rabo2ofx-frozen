@@ -255,7 +255,7 @@ class CsvFile():
         #transnr = 0
         self.fitid = {}
 
-        with open(ARGS.csvfile, 'rb') as csvfile:
+        with open(ARGS.csvfile, 'r', newline='', encoding='iso-8859-1') as csvfile:
             fieldnames = (self.keyAccount, self.keyCurrency, self.keyBIC,
                           self.keySerialNumber, self.keyDate, self.keyInterestDate,
                           self.keyAmount, self.keyBalanceAfterTxn,
@@ -557,7 +557,7 @@ class OfxWriter():
         # Gather account numbers
         for trns in self.csv.transactions:
             accNr = trns['account']
-            if accounts.has_key(accNr):
+            if accNr in accounts:
                 account_rec = accounts[accNr]
             else:
                 account_rec = dict()
@@ -613,7 +613,7 @@ class OfxWriter():
             print(    "\taccountnumber     processed  skip   sum")
             for account in accounts:
                 sys.stdout.write('\t%s '% account)      # prevent '\n'
-                print("%(txn_processed)8d %(txn_skip)5d %(txn_ctr)5d")%accounts[account]
+                print("%(txn_processed)8d %(txn_skip)5d %(txn_ctr)5d"%accounts[account] )
             print ("\t-")
             if len(self.processed_accounts) > len(self.cfg.config_accounts):
                 print("warning: it seems you have more accounts in your file(s)")
