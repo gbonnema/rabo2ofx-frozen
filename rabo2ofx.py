@@ -22,6 +22,8 @@
 #        along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 # 
+# 2021-11-24 guus adding option to override date_posted for processing date in stead of interest date
+#                 adding a simple counter of overrides per account
 # 2019-08-21 guus adding option for homebank to not skip internal transactions
 #                 corrected argument processing
 #                 no longer force filename to lowercase.
@@ -52,6 +54,10 @@ which is now dead.
 Find the ofx specification at http://www.ofx.net/
 
 == Documentation ==
+
+[nov 2021] On request: 
+created an option to override the date posted with the current date of the transaction.
+Added a counter per account for number of overrides. 
 
 [aug 2019]
 Decided to use HomeBank next to GnuCash. For homebank the program needs to
@@ -161,6 +167,7 @@ HISTORY = {
     "2.12": ("Added homebank option", "2019-08-21", "gbo"),
     "2.12.1": ("Added minor edits and docs", "2019-08-23", "gbo"),
     "2.13": ("Added OFX booking codes", "2019-08-23", "gbo"),
+    "2.14": ("Added override date posted option", "2021-11-24", "gbo"),
     }
 
 VERSION = "2.13"
@@ -250,7 +257,7 @@ class CsvFile():
         "D": "tekort"
     }
 
-    def __init__(self):
+    def __init__(self, overrides):
         self.transactions = list()
         #transnr = 0
         self.fitid = {}
@@ -282,31 +289,39 @@ class CsvFile():
                     continue        # skip the first line
                 if not row:
                     continue
-                ofx_data = self.create_ofx(row)
+                ofx_data = self.create_ofx(row, overrides)
                 self.transactions.append(ofx_data)
 
-    def create_ofx(self, row):
+    def create_ofx(self, row, overrides):
         """ Main processor where ofx records are constructed. """
-        account = self.map_account(row)
-        trntype = self.map_transaction_type(row)
-        dtposted = self.map_date_posted(row)
-        trnamt = self.map_amount(row)
+        nr_overrides = 0
+        (times_override, account) = self.map_account(row, overrides)
+        nr_overrides += times_override
+        (times_override, trntype) = self.map_transaction_type(row, overrides)
+        nr_overrides += times_override
+        (times_override, dtposted) = self.map_date_posted(row, overrides)
+        nr_overrides += times_override
+        (times_override, trnamt) = self.map_amount(row, overrides)
+        nr_overrides += times_override
         # remark: serialnumber is unique per account, but only filled for checking account
         # later savings account will have it filled too.
         fitid = self.map_fitid(account, row[self.keySerialNumber], trnamt, dtposted)
-        accountto = self.map_account_to(row)
-        (name, memo) = self.map_memo_name(row)
+        (times_override, accountto) = self.map_account_to(row, overrides)
+        nr_overrides += times_override
+        (times_override, name, memo) = self.map_memo_name(row, overrides)
+        nr_overrides += times_override
 
         return {'account': account,
                 'trntype': trntype, 'dtposted': dtposted,
                 'trnamt': trnamt, 'fitid': fitid,
-                'name': name, 'accountto': accountto, 'memo': memo}
+                'name': name, 'accountto': accountto, 'memo': memo,
+                'nr_overrides': nr_overrides}
 
-    def map_account(self, row):
+    def map_account(self, row, overrides):
         """ map account without spaces """
-        return row[self.keyAccount].replace(" ", "")
+        return (0, row[self.keyAccount].replace(" ", ""))
 
-    def map_transaction_type(self, row):
+    def map_transaction_type(self, row, overrides):
         """ map transaction type to debit and credit """
         # Map transaction amount to trntype ('+' = 'DEBIT', '-' || '[\d]' = 'CREDIT')
         if row[self.keyBookCode] == 'ac':
@@ -343,19 +358,25 @@ class CsvFile():
             trntype = 'DEBIT'
         else:
             trntype = 'CREDIT'
-        return trntype
+        return (0, trntype)
 
-    def map_date_posted(self, row):
+    def map_date_posted(self, row, overrides):
         """ map date posted without dashes """
         # The DTPOSTED in ofx is in yyyymmddhhmmss format
         # input is formatted in yyyy-mm-dd
         # needs conversion
+        #
+        # check override
+        nr_overrides = 0
         date = row[self.keyInterestDate]
+        if  overrides['force_date_posted'] and date != row[self.keyDate] :
+            nr_overrides += 1
+            date = row[self.keyDate]
         pattern = re.compile(r"\-")
         date = pattern.sub("", date)
-        return date
+        return (nr_overrides, date)
 
-    def map_amount(self, row):
+    def map_amount(self, row, overrides):
         """ map amount replacing comma to point or v.v. """
         amt = row[self.keyAmount]
         # convert to comma or point depending on arguments (default decimal point)
@@ -363,9 +384,9 @@ class CsvFile():
             amt = amt.replace(".", ",")
         else:
             amt = amt.replace(",", ".")
-        return amt
+        return (0, amt)
 
-    def map_balance(self, row):
+    def map_balance(self, row, overrides):
         """ map balance to amount replacing comma to point or v.v. """
         amt = row[self.keyBalanceAfterTxn]
         # convert to comma or point depending on arguments (default decimal point)
@@ -373,7 +394,7 @@ class CsvFile():
             amt = amt.replace(".", ",")
         else:
             amt = amt.replace(",", ".")
-        return amt
+        return (0, amt)
 
     def map_fitid(self, account, volgnr, trnamt, dtposted):
         """ Construct Fitid """
@@ -409,11 +430,11 @@ class CsvFile():
         # return the now unique fitid
         return fitid
 
-    def map_account_to(self, row):
+    def map_account_to(self, row, overrides):
         """ map counter account to account_to. """
-        return row[self.keyCounterAcctNr]
+        return (0, row[self.keyCounterAcctNr])
 
-    def map_memo_name(self, row):
+    def map_memo_name(self, row, overrides):
         """Map several description fields to memo and construct name"""
         # Constructing description depends on bookcode
 
@@ -444,7 +465,7 @@ class CsvFile():
             descr = descr + "betalingskenmerk " + row[self.keyBetalingsKenmerk]
 
         memo = descr.replace("&", "&amp")
-        return (name, memo)
+        return (0, name, memo)
 
 # ************** End Class CsvFile ***********************************************
 # ********************************************************************************
@@ -454,18 +475,23 @@ class CsvFile():
 class Cfg():
     """ class Cfg. """
 
-    config_accounts = None
-
     def __init__(self):
         config = configparser.ConfigParser()
         # use default filename for now
         configfile = "config.rabo2ofx.ini"
         self.config_accounts = list()
+        self.config_overrides = dict()
         if os.path.exists(os.path.join(os.getcwd(), configfile)):
             config.read(configfile)
+            config.sections()
             # store all accounts in uppercase
             for acc in config['accounts'].values():
                 self.config_accounts.append(acc.upper())
+            # get any overrides
+##            if 'override' in config:
+            for key in config['override']:
+                self.config_overrides[key] = config['override'][key]
+
 
     def run(self):
         """ dummy run section for config class """
@@ -475,6 +501,9 @@ class Cfg():
             print(account + " " + msg)
             msg = "Subordinate to all previous accounts."
         print
+        print("override")
+        print
+        print("force_date_posted")
 
     def main_accounts(self, account):
         """ Return the main accounts in a list """
@@ -483,12 +512,18 @@ class Cfg():
         main_accounts = set()
         for acc in self.config_accounts:
             main = acc
-            # stop when we incounter the same account
+            # stop when we encounter the same account
             if main == account:
                 break;
             main_accounts.add(main)
 
         return main_accounts
+
+    def get_override(self, key):
+        """ Return override requested if available """
+        #
+        return config_override[key]
+
 
 
 # ************** End Class Cfg     ***********************************************
@@ -532,7 +567,7 @@ class OfxWriter():
         self.filepath = os.path.join(os.getcwd(), dir, self.filename)
 
         #Initiate a csv object with data in list of dictionaries.
-        self.csv = CsvFile()
+        self.csv = CsvFile(cfg.config_overrides)
 
     def run(self):
         """ Run the generation of ofx records. """
@@ -564,6 +599,7 @@ class OfxWriter():
                 account_rec['txn_ctr'] = 0
                 account_rec['txn_skip'] = 0
                 account_rec['txn_processed'] = 0
+                account_rec['nr_overrides'] = 0
                 accounts[accNr] = account_rec
             if int(trns['dtposted']) < mindate:
                 mindate = int(trns['dtposted'])
@@ -597,8 +633,10 @@ class OfxWriter():
                         # guard against processing transfer between accounts twice for GnuCash
                         if trns['accountto'] in transfer_accounts and not ARGS.homebank:
                             accounts[account]['txn_skip'] += 1
+                            # ignore nr_overrides
                         else:
                             accounts[account]['txn_processed'] += 1
+                            accounts[account]['nr_overrides'] += trns['nr_overrides']
                             ofxfile.write(message_transaction)
 
                 account_message_end = construct_account_end()
@@ -610,10 +648,10 @@ class OfxWriter():
             ofxfile.write(message_footer)
 
             # Check accounts processed versus found accounts
-            print(    "\taccountnumber     processed  skip   sum")
+            print("\taccountnumber     processed  skip   sum   overrides")
             for account in accounts:
                 sys.stdout.write('\t%s '% account)      # prevent '\n'
-                print("%(txn_processed)8d %(txn_skip)5d %(txn_ctr)5d"%accounts[account] )
+                print("%(txn_processed)8d %(txn_skip)5d %(txn_ctr)5d %(nr_overrides)11d"%accounts[account] )
             print ("\t-")
             if len(self.processed_accounts) > len(self.cfg.config_accounts):
                 print("warning: it seems you have more accounts in your file(s)")
@@ -627,6 +665,10 @@ class OfxWriter():
                 print
                 print("         The config file is called 'config.rabo2ofx.ini'.")
                 print("")
+            if self.cfg.config_overrides:
+                print("---- overrides        -----")
+                for key in self.cfg.config_overrides:
+                    print(key + " = " + self.cfg.config_overrides[key])
 
     def gather_transfer_accounts(self, account):
         """ Make sure all main accounts in config or already processed are

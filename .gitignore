@@ -105,3 +105,6 @@ ENV/
 config.rabo2ofx.ini
 *.swp
 test-dir
+ofx*
+save_ofx*
+
