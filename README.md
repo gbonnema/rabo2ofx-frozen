@@ -1,5 +1,16 @@
 # Rabo2ofx
 
+## Project stopped
+
+This project is frozen and no longer maintained. 
+From this month on, I have no Rabo account and I am no longer able to test the script.
+Shouild anyone want to take over maintenance, let me know and I will point any unsuspecting users
+to your repository. 
+
+The rest of the readme contents is unchanged.
+
+## old project info 
+
 This program converts the Dutch rabo csv file for non-business
 customers to the financial records of OFX for GnuCash or for HomeBank.
 The csv file is available for download for each customer.
